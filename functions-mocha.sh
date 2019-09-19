@@ -17,11 +17,39 @@ if [ -f ./actions/*/tests/*.js ]; then
         echo "publishtestrecord"
         ibmcloud login --apikey ${IBM_CLOUD_API_KEY} --no-region
         ibmcloud doi publishtestrecord --type unittest --buildnumber ${BUILD_NUMBER} --filelocation ${FILE_LOCATION} \
-          --buildnumber ${BUILD_NUMBER} --logicalappname ${IMAGE_NAME}
+          --buildnumber ${SOURCE_BUILD_NUMBER} --logicalappname ${IMAGE_NAME}
         #ibmcloud doi publishtestrecord --type code --buildnumber ${BUILD_NUMBER} --filelocation ./coverage/coverage-summary.json \
-          --buildnumber ${BUILD_NUMBER} --logicalappname ${IMAGE_NAME}
+          --buildnumber ${SOURCE_BUILD_NUMBER} --logicalappname ${IMAGE_NAME}
       fi
   fi
 else
   echo "Test runner script not found: ./actions/*/tests/*.js"
 fi
+
+npm install sonarqube-scanner -g
+
+cat <<EOT >> sonar-project.properties
+# must be unique in a given SonarQube instance
+sonar.projectKey=${FUNCTION_NAME} 
+sonar.projectName=${FUNCTION_NAME} 
+sonar.host.url=${SONAR_URL}
+sonar.login=${SONAR_KEY}
+sonar.language=js
+sonar.sources=actions
+#sonar.tests=tests
+sonar.projectVersion=${GIT_COMMIT}
+#sonar.javascript.lcov.reportPaths=./coverage/lcov.info
+#sonar.scanner.metadataFilePath=./sonar-report-task.txt
+sonar.working.directory=sonar
+EOT
+
+sonar-scanner
+
+ls -la *
+
+cat ./sonar/report-task.txt
+
+cat build.properties
+
+ibmcloud login --apikey ${IBM_CLOUD_API_KEY} --no-region
+ibmcloud doi publishtestrecord --type sonarqube --buildnumber ${SOURCE_BUILD_NUMBER} --sqtoken ${SONAR_KEY} --filelocation ./sonar/report-task.txt --logicalappname ${FUNCTION_NAME}
